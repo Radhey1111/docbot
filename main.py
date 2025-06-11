@@ -132,12 +132,18 @@ async def query_answer(request: Request):
     }
 
 # --- Theme Synthesis with Falcon ---
-client = InferenceClient(
-    model="tiiuae/falcon-7b-instruct",
+import traceback
+from huggingface_hub import InferenceClient
+
+# Initialize Hugging Face Inference Client
+cclient = InferenceClient(
+    model="google/flan-t5-large",
     token=os.getenv("HUGGINGFACEHUB_API_TOKEN")
 )
 
+
 def synthesize_theme(question, answers):
+    # Combine answers into a formatted context for the prompt
     combined_content = "\n\n".join(
         [f"Doc {i+1}: {a['content']} (Source: Page {a['citation']['page']}, Para {a['citation']['paragraph']})"
          for i, a in enumerate(answers)]
@@ -169,12 +175,14 @@ Sources: ...
         print("🧠 Sending prompt to Falcon...")
         response = client.text_generation(
             prompt=prompt,
-            max_new_tokens=500,
+            max_new_tokens=400,  # Falcon sometimes fails >512
             temperature=0.3,
             stop_sequences=["\n\n"]
         )
         print("✅ Falcon response received.")
-        return response
+        return response.strip()
+    
     except Exception as e:
-        print("❌ Error in Falcon synthesis:", str(e))
-        return "Theme synthesis failed."
+        print("❌ Error in Falcon synthesis:")
+        traceback.print_exc()
+        return f"Theme synthesis failed. Error: {str(e)}"
