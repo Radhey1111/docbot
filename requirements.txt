@@ -1,0 +1,10 @@
+streamlit
+requests
+pytesseract
+pdfplumber
+Pillow
+uuid
+huggingface_hub
+langchain
+sentence-transformers
+python-dotenv
