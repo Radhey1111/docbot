@@ -1,10 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
 streamlit
-requests
 pytesseract
 pdfplumber
 Pillow
-uuid
-huggingface_hub
 langchain
-sentence-transformers
+chromadb
+huggingface_hub
 python-dotenv
