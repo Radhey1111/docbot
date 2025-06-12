@@ -1,85 +1,54 @@
 import os
 from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
+from uuid import uuid4
 
-# --- Constants ---
-CHROMA_DIR = "vectorstore"
-
-# --- HuggingFace Embeddings ---
-from langchain.embeddings import HuggingFaceInferenceAPIEmbeddings
-import os
-
-HF_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")  # ensure this is set in Render settings
-
+# Load remote inference API embeddings (to avoid memory issues)
 embedding_model = HuggingFaceInferenceAPIEmbeddings(
-    api_key=HF_API_TOKEN,
+    api_key=os.environ["HUGGINGFACEHUB_API_TOKEN"],
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
+# Set the persistent directory for Chroma
+CHROMA_DIR = "chroma_db"
 
-# --- Text Splitter ---
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+def create_vector_store(texts: list[dict], doc_id: str):
+    """
+    Create or update a Chroma vector store from a list of dictionaries containing:
+    - 'content': the paragraph/sentence
+    - 'metadata': includes 'page', 'paragraph', 'doc_id'
+    """
 
-# === Create Vector Store ===
-def create_vector_store(texts, uid="unknown"):
-    print("🛠 Creating vector store for doc_id:", uid)
-    documents = []
+    # Convert to LangChain Documents
+    documents = [
+        Document(page_content=chunk["content"], metadata=chunk["metadata"])
+        for chunk in texts
+    ]
 
-    for para_num, text in enumerate(texts):
-        if not text.strip():
-            continue
-        for chunk in text_splitter.split_text(text):
-            documents.append(Document(
-                page_content=chunk,
-                metadata={
-                    "page": para_num // 5 + 1,      # Approx page number
-                    "paragraph": para_num,
-                    "doc_id": uid
-                }
-            ))
-
+    # Initialize or update Chroma
     db = Chroma.from_documents(
-        documents,
+        documents=documents,
         embedding=embedding_model,
         persist_directory=CHROMA_DIR
     )
     db.persist()
-    print("✅ Vector store created and persisted.")
+    return db
 
-# === Load Vector Store ===
 def load_vector_store():
-    print("📦 Loading Chroma vector store from:", CHROMA_DIR)
+    """
+    Load the existing Chroma vector store from disk.
+    """
     return Chroma(
         persist_directory=CHROMA_DIR,
         embedding_function=embedding_model
     )
 
-# === Optional: Initialize Vector Store ===
-def init_vector_store(pages, uid="unknown"):
-    if os.path.exists(CHROMA_DIR) and os.path.exists(os.path.join(CHROMA_DIR, "chroma-collections.parquet")):
-        print("🔁 Vector store found. Loading...")
-        return load_vector_store()
-    else:
-        print("🆕 No vector store found. Creating a new one...")
-        create_vector_store(pages, uid)
-        return load_vector_store()
-
-# === Query Vector Store ===
-def query_vector_store(query, vector_store):
-    print("🔎 Querying vector store...")
-    results = vector_store.similarity_search_with_score(query, k=5)
-    formatted = []
-
-    for doc, score in results:
-        metadata = doc.metadata or {}
-        formatted.append({
-            "content": doc.page_content,
-            "score": score,
-            "citation": {
-                "page": metadata.get("page", "?"),
-                "paragraph": metadata.get("paragraph", "?"),
-                "doc_id": metadata.get("doc_id", "?")
-            }
-        })
-    return formatted
+def query_vector_store(query: str, k: int = 5):
+    """
+    Query the Chroma store for top-k matches to the input query.
+    """
+    db = load_vector_store()
+    results = db.similarity_search_with_score(query, k=k)
+    return results
