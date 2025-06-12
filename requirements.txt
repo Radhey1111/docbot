@@ -1,11 +1,14 @@
 fastapi
 uvicorn[standard]
 python-multipart
-streamlit
 pytesseract
 pdfplumber
 Pillow
+streamlit
 langchain
+langchain-community
 chromadb
 huggingface_hub
 python-dotenv
+transformers
+requests
