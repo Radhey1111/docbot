@@ -7,6 +7,7 @@ from PIL import Image
 import os
 import shutil
 import uuid
+import traceback
 from dotenv import load_dotenv
 from vector_store import create_vector_store, load_vector_store
 from huggingface_hub import InferenceClient
@@ -14,7 +15,6 @@ from huggingface_hub import InferenceClient
 # Load env variables
 load_dotenv()
 
-# --- Init FastAPI ---
 app = FastAPI()
 
 # --- CORS ---
@@ -76,12 +76,22 @@ async def upload_file(file: UploadFile = File(...)):
     with open(os.path.join(TEXT_DIR, f"{uid}.txt"), "w") as f:
         f.write(extracted_text)
 
-    # Prepare chunks
-    paragraphs = extracted_text.split('\n')
-    texts = [p.strip() for p in paragraphs if len(p.strip()) > 20]
-    print("📄 Prepared chunks:", texts)
+    # Chunk and format text with metadata
+    paragraphs = [p.strip() for p in extracted_text.split('\n') if len(p.strip()) > 20]
+    texts = []
+    for i, para in enumerate(paragraphs):
+        texts.append({
+            "content": para,
+            "metadata": {
+                "doc_id": uid,
+                "paragraph": i + 1,
+                "page": i // 4 + 1  # heuristic if no real page data
+            }
+        })
 
-    # Create vector store with metadata
+    print("📄 Prepared chunks:", texts[:2])  # Log first few for debug
+
+    # Create vector store
     create_vector_store(texts, uid)
 
     # Create empty summary file
@@ -120,7 +130,6 @@ async def query_answer(request: Request):
 
     synthesized_answer = synthesize_theme(question, answers)
 
-    # Save summary
     if answers:
         summary_path = os.path.join(SUMMARY_DIR, f"{answers[0]['citation']['doc_id']}.txt")
         with open(summary_path, "w") as f:
@@ -131,19 +140,13 @@ async def query_answer(request: Request):
         "summary": synthesized_answer
     }
 
-# --- Theme Synthesis with Falcon ---
-import traceback
-from huggingface_hub import InferenceClient
-
-# Initialize Hugging Face Inference Client
+# --- Theme Synthesis with HuggingFace Client ---
 cclient = InferenceClient(
     model="google/flan-t5-large",
     token=os.getenv("HUGGINGFACEHUB_API_TOKEN")
 )
 
-
 def synthesize_theme(question, answers):
-    # Combine answers into a formatted context for the prompt
     combined_content = "\n\n".join(
         [f"Doc {i+1}: {a['content']} (Source: Page {a['citation']['page']}, Para {a['citation']['paragraph']})"
          for i, a in enumerate(answers)]
@@ -172,17 +175,16 @@ Sources: ...
 """
 
     try:
-        print("🧠 Sending prompt to Falcon...")
-        response = client.text_generation(
+        print("🧠 Sending prompt to HF model...")
+        response = cclient.text_generation(
             prompt=prompt,
-            max_new_tokens=400,  # Falcon sometimes fails >512
+            max_new_tokens=400,
             temperature=0.3,
             stop_sequences=["\n\n"]
         )
-        print("✅ Falcon response received.")
+        print("✅ Response received.")
         return response.strip()
-    
     except Exception as e:
-        print("❌ Error in Falcon synthesis:")
+        print("❌ Error in synthesis:")
         traceback.print_exc()
         return f"Theme synthesis failed. Error: {str(e)}"
