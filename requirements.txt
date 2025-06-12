@@ -11,3 +11,4 @@ chromadb
 huggingface_hub
 python-dotenv
 requests
+streamlit
