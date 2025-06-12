@@ -8,7 +8,16 @@ from langchain.docstore.document import Document
 CHROMA_DIR = "vectorstore"
 
 # --- HuggingFace Embeddings ---
-embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+from langchain.embeddings import HuggingFaceInferenceAPIEmbeddings
+import os
+
+HF_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")  # ensure this is set in Render settings
+
+embedding_model = HuggingFaceInferenceAPIEmbeddings(
+    api_key=HF_API_TOKEN,
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
+
 
 # --- Text Splitter ---
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
