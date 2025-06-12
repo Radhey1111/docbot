@@ -14,20 +14,23 @@ embedding_model = HuggingFaceInferenceAPIEmbeddings(
 # Set the persistent directory for Chroma
 CHROMA_DIR = "chroma_db"
 
-def create_vector_store(texts: list[dict], doc_id: str):
+def create_vector_store(texts: list, doc_id: str):
     """
-    Create or update a Chroma vector store from a list of dictionaries containing:
-    - 'content': the paragraph/sentence
-    - 'metadata': includes 'page', 'paragraph', 'doc_id'
+    Create or update a Chroma vector store from a list of texts (with or without metadata).
     """
 
-    # Convert to LangChain Documents
-    documents = [
-        Document(page_content=chunk["content"], metadata=chunk["metadata"])
-        for chunk in texts
-    ]
+    # Check if plain strings or dicts
+    if isinstance(texts[0], str):
+        documents = [
+            Document(page_content=chunk, metadata={"doc_id": doc_id})
+            for chunk in texts
+        ]
+    else:
+        documents = [
+            Document(page_content=chunk["content"], metadata=chunk["metadata"])
+            for chunk in texts
+        ]
 
-    # Initialize or update Chroma
     db = Chroma.from_documents(
         documents=documents,
         embedding=embedding_model,
@@ -35,6 +38,7 @@ def create_vector_store(texts: list[dict], doc_id: str):
     )
     db.persist()
     return db
+
 
 def load_vector_store():
     """
