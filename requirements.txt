@@ -12,4 +12,4 @@ huggingface_hub
 python-dotenv
 requests
 streamlit
-sentence-transformers
+
