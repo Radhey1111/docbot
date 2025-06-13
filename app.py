@@ -12,8 +12,10 @@ uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
 
 if uploaded_file:
     with st.spinner("📤 Uploading and processing..."):
-        files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
+        file_bytes = uploaded_file.read()  # ✅ important fix
+        files = {"file": (uploaded_file.name, file_bytes, "application/pdf")}
         response = requests.post(f"{FASTAPI_URL}/upload/", files=files)
+
 
     if response.status_code == 200:
         st.success("✅ File uploaded successfully!")
