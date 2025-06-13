@@ -1,50 +1,58 @@
-# streamlit_app.py
 import streamlit as st
 import requests
 
+✅ Set your backend URL here
 API_BASE_URL = "https://chatbotthemeidentifier-s6xt.onrender.com"
 
-st.set_page_config(page_title="📄 DocBot", layout="wide")
-st.title("📄 DocBot – Ask Questions from Your PDF")
+st.set_page_config(page_title="📄 DocBot – Chat with your PDFs", layout="centered")
+st.title("📄 DocBot – Chat with your PDFs")
 
-uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
+File uploader
+uploaded_file = st.file_uploader("📎 Upload a PDF file", type=["pdf"])
 
 if uploaded_file:
-    # ✅ This line must be indented inside the if block
-    st.write(f"Uploaded: {uploaded_file.name}, {uploaded_file.size / 1024:.1f} KB")
+with st.spinner("📤 Uploading and processing..."):
+try:
+files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
+response = requests.post(f"{API_BASE_URL}/upload/", files=files)
+response.raise_for_status()
+except Exception as e:
+st.error(f"❌ Upload failed: {e}")
+st.stop()
 
-    with st.spinner("📤 Uploading..."):
+python
+Copy
+Edit
+data = response.json()
+doc_id = data.get("doc_id")
+filename = data.get("filename")
+
+st.success("✅ File uploaded successfully!")
+
+# Question input
+question = st.text_input("💬 Ask a question about the uploaded document:")
+
+if st.button("Get Answer") and question.strip():
+    with st.spinner("🔎 Searching for answer..."):
         try:
-            file_bytes = uploaded_file.getvalue()
-            files = {"file": (uploaded_file.name, file_bytes, "application/pdf")}
-            res = requests.post(f"{API_BASE_URL}/upload/", files=files)
+            query_data = {"question": question, "doc_id": doc_id}
+            response = requests.post(f"{API_BASE_URL}/query/", json=query_data)
+            response.raise_for_status()
         except Exception as e:
-            st.error(f"❌ Upload error: {e}")
+            st.error(f"❌ Query failed: {e}")
             st.stop()
 
-    if res.status_code == 200:
-        st.success("✅ File uploaded!")
-        doc_id = res.json().get("doc_id")
-        question = st.text_input("Ask a question about your document:")
+    result = response.json()
+    summary = result.get("summary", "")
+    answers = result.get("answers", [])
 
-        if st.button("Get Answer") and question.strip():
-            with st.spinner("💬 Thinking..."):
-                try:
-                    res2 = requests.post(f"{API_BASE_URL}/query/", json={"question": question, "doc_id": doc_id})
-                    if res2.status_code == 200:
-                        result = res2.json()
-                        st.markdown("### 🧠 Answer:")
-                        st.write(result.get("summary", "No summary found."))
+    st.markdown(f"### 🧠 Summary:\n{summary}")
 
-                        st.markdown("### 📚 Sources:")
-                        for i, src in enumerate(result.get("answers", [])):
-                            meta = src["citation"]
-                            st.markdown(f"- Page {meta.get('page')}, Para {meta.get('paragraph')} (Doc ID: {meta.get('doc_id')})")
-                    else:
-                        st.error("❌ Failed to retrieve answer.")
-                except Exception as e:
-                    st.error(f"❌ Query error: {e}")
-    else:
-        st.error("❌ Upload failed.")
+    if answers:
+        st.markdown("#### 📚 References:")
+        for i, ans in enumerate(answers, 1):
+            citation = ans["citation"]
+            content = ans["content"]
+            st.markdown(f"{i}. {content}\n\nSource: Page {citation.get('page')}, Para {citation.get('paragraph')}")
 else:
-    st.info("📎 Upload a PDF to begin.")
+st.info("📄 Please upload a PDF to get started.")
