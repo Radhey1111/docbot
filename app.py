@@ -22,13 +22,11 @@ if uploaded_file:
             st.stop()
 
     if upload_resp.status_code == 200:
-        data = upload_resp.json()
-        st.success("✅ File uploaded!")
-        doc_id = data["doc_id"]
-        filename = data["filename"]
-    else:
-        st.error(f"❌ Upload failed. Status code: {upload_resp.status_code}")
-        st.stop()
+    st.success("✅ File uploaded successfully!")
+    doc_id = upload_resp.json().get("doc_id")
+    filename = upload_resp.json().get("filename")
+else:
+    st.error(f"❌ Upload failed. Status code: {upload_resp.status_code}")
 
 
         with st.spinner("🛠️ Processing..."):
