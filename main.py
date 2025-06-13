@@ -7,17 +7,18 @@ from PIL import Image
 import os
 import shutil
 import uuid
-import traceback
 from dotenv import load_dotenv
 from vector_store import create_vector_store, load_vector_store
+import traceback
 from huggingface_hub import InferenceClient
 
-# Load env variables
+# Load env
 load_dotenv()
 
+# Init FastAPI
 app = FastAPI()
 
-# --- CORS ---
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +27,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Directories ---
+# Directories
 UPLOAD_DIR = "uploaded_docs"
 TEXT_DIR = "extracted_texts"
 SUMMARY_DIR = "summaries"
@@ -35,10 +36,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(TEXT_DIR, exist_ok=True)
 os.makedirs(SUMMARY_DIR, exist_ok=True)
 
-# --- Serve uploaded PDFs ---
+# Serve uploaded files
 app.mount("/files", StaticFiles(directory=UPLOAD_DIR), name="files")
 
-# --- Text Extraction ---
+# Text extraction
 def extract_text_from_pdf(file_path):
     text = ""
     with pdfplumber.open(file_path) as pdf:
@@ -52,7 +53,7 @@ def extract_text_from_image(file_path):
     image = Image.open(file_path)
     return pytesseract.image_to_string(image)
 
-# --- Upload Endpoint ---
+# Upload Endpoint
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
     file_ext = file.filename.split('.')[-1]
@@ -76,25 +77,14 @@ async def upload_file(file: UploadFile = File(...)):
     with open(os.path.join(TEXT_DIR, f"{uid}.txt"), "w") as f:
         f.write(extracted_text)
 
-    # Chunk and format text with metadata
-    paragraphs = [p.strip() for p in extracted_text.split('\n') if len(p.strip()) > 20]
-    texts = []
-    for i, para in enumerate(paragraphs):
-        texts.append({
-            "content": para,
-            "metadata": {
-                "doc_id": uid,
-                "paragraph": i + 1,
-                "page": i // 4 + 1  # heuristic if no real page data
-            }
-        })
-
-    print("📄 Prepared chunks:", texts[:2])  # Log first few for debug
+    # Prepare chunks
+    paragraphs = extracted_text.split('\n')
+    texts = [p.strip() for p in paragraphs if len(p.strip()) > 20]
 
     # Create vector store
     create_vector_store(texts, uid)
 
-    # Create empty summary file
+    # Save empty summary
     with open(os.path.join(SUMMARY_DIR, f"{uid}.txt"), "w") as sf:
         sf.write(f"Summary not generated yet for {uid}")
 
@@ -104,48 +94,13 @@ async def upload_file(file: UploadFile = File(...)):
         "filename": saved_filename
     }
 
-# --- Query Endpoint ---
-@app.post("/query/")
-async def query_answer(request: Request):
-    body = await request.json()
-    question = body.get("question", "")
-    doc_id = body.get("doc_id", "")
-
-    db = load_vector_store()
-    results = db.similarity_search_with_score(question, k=5)
-
-    answers = []
-    for doc, score in results:
-        metadata = doc.metadata or {}
-        citation = {
-            "page": metadata.get("page", "?"),
-            "paragraph": metadata.get("paragraph", "?"),
-            "doc_id": metadata.get("doc_id", "?")
-        }
-        answers.append({
-            "content": doc.page_content,
-            "score": score,
-            "citation": citation
-        })
-
-    synthesized_answer = synthesize_theme(question, answers)
-
-    if answers:
-        summary_path = os.path.join(SUMMARY_DIR, f"{answers[0]['citation']['doc_id']}.txt")
-        with open(summary_path, "w") as f:
-            f.write(synthesized_answer)
-
-    return {
-        "answers": answers,
-        "summary": synthesized_answer
-    }
-
-# --- Theme Synthesis with HuggingFace Client ---
-cclient = InferenceClient(
+# Hugging Face Client
+client = InferenceClient(
     model="google/flan-t5-large",
     token=os.getenv("HUGGINGFACEHUB_API_TOKEN")
 )
 
+# Theme synthesis
 def synthesize_theme(question, answers):
     combined_content = "\n\n".join(
         [f"Doc {i+1}: {a['content']} (Source: Page {a['citation']['page']}, Para {a['citation']['paragraph']})"
@@ -175,16 +130,51 @@ Sources: ...
 """
 
     try:
-        print("🧠 Sending prompt to HF model...")
-        response = cclient.text_generation(
+        response = client.text_generation(
             prompt=prompt,
             max_new_tokens=400,
             temperature=0.3,
             stop_sequences=["\n\n"]
         )
-        print("✅ Response received.")
         return response.strip()
+
     except Exception as e:
-        print("❌ Error in synthesis:")
         traceback.print_exc()
         return f"Theme synthesis failed. Error: {str(e)}"
+
+# Query Endpoint
+@app.post("/query/")
+async def query_answer(request: Request):
+    body = await request.json()
+    question = body.get("question", "")
+    doc_id = body.get("doc_id", "")
+
+    db = load_vector_store()
+    results = db.similarity_search_with_score(question, k=5)
+
+    answers = []
+    for doc, score in results:
+        metadata = doc.metadata or {}
+        citation = {
+            "page": metadata.get("page", "?"),
+            "paragraph": metadata.get("paragraph", "?"),
+            "doc_id": metadata.get("doc_id", "?")
+        }
+        answers.append({
+            "content": doc.page_content,
+            "score": score,
+            "citation": citation
+        })
+
+    synthesized_answer = synthesize_theme(question, answers)
+
+    # Save summary
+    if answers:
+        summary_path = os.path.join(SUMMARY_DIR, f"{answers[0]['citation']['doc_id']}.txt")
+        with open(summary_path, "w") as f:
+            f.write(synthesized_answer)
+
+    return {
+        "answer": synthesized_answer,
+        "sources": [ans["citation"] for ans in answers]
+    }
