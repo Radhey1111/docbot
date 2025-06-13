@@ -2,7 +2,7 @@
 import streamlit as st
 import requests
 
-API_BASE_URL = "https://docbot-7eol.onrender.com"
+API_BASE_URL = "https://docbot-7eol.onrender.com/docs"
 
 st.set_page_config(page_title="DocBot - Chat with Your Documents")
 st.title("📄 DocBot - Ask Questions from Your PDF")
@@ -10,19 +10,26 @@ st.title("📄 DocBot - Ask Questions from Your PDF")
 uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
 
 if uploaded_file:
+    st.write(f"Uploaded: {uploaded_file.name}, {uploaded_file.size / 1024:.1f} KB")
+
     with st.spinner("📤 Uploading..."):
-        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
         try:
+            file_bytes = uploaded_file.getvalue()
+            files = {"file": (uploaded_file.name, file_bytes, "application/pdf")}
             upload_resp = requests.post(f"{API_BASE_URL}/upload/", files=files)
         except Exception as e:
-            st.error(f"❌ Upload failed: {e}")
+            st.error(f"❌ Upload request error: {e}")
             st.stop()
 
     if upload_resp.status_code == 200:
         data = upload_resp.json()
+        st.success("✅ File uploaded!")
         doc_id = data["doc_id"]
         filename = data["filename"]
-        st.success("✅ Uploaded!")
+    else:
+        st.error(f"❌ Upload failed. Status code: {upload_resp.status_code}")
+        st.stop()
+
 
         with st.spinner("🛠️ Processing..."):
             process_resp = requests.post(f"{API_BASE_URL}/process/", json={"doc_id": doc_id})
