@@ -9,13 +9,13 @@ st.title("📄 DocBot – Chat with your PDFs")
 uploaded_file = st.file_uploader("📎 Upload a PDF file", type=["pdf"])
 
 if uploaded_file:
-with st.spinner("📤 Uploading and processing..."):
+with st.spinner("Uploading and processing..."):
 try:
 files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
 response = requests.post(f"{API_BASE_URL}/upload/", files=files)
 response.raise_for_status()
 except Exception as e:
-st.error(f"❌ Upload failed: {e}")
+st.error(f" Upload failed: {e}")
 st.stop()
 
 python
@@ -25,9 +25,9 @@ data = response.json()
 doc_id = data.get("doc_id")
 filename = data.get("filename")
 
-st.success("✅ File uploaded successfully!")
+st.success("File uploaded successfully!")
 
-question = st.text_input("💬 Ask a question about the uploaded document:")
+question = st.text_input(" Ask a question about the uploaded document:")
 
 if st.button("Get Answer") and question.strip():
     with st.spinner("🔎 Searching for answer..."):
@@ -36,17 +36,17 @@ if st.button("Get Answer") and question.strip():
             response = requests.post(f"{API_BASE_URL}/query/", json=query_data)
             response.raise_for_status()
         except Exception as e:
-            st.error(f"❌ Query failed: {e}")
+            st.error(f" Query failed: {e}")
             st.stop()
 
     result = response.json()
     summary = result.get("summary", "")
     answers = result.get("answers", [])
 
-    st.markdown(f"### 🧠 Summary:\n{summary}")
+    st.markdown(f"###  Summary:\n{summary}")
 
     if answers:
-        st.markdown("#### 📚 References:")
+        st.markdown("#### References:")
         for i, ans in enumerate(answers, 1):
             citation = ans["citation"]
             content = ans["content"]
