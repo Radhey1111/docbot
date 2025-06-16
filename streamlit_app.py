@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 
-Set your backend URL here
 API_BASE_URL = "https://chatbotthemeidentifier-s6xt.onrender.com"
 
 st.set_page_config(page_title="DocBot – Chat with your PDFs", layout="centered")
