@@ -1,13 +1,12 @@
 import streamlit as st
 import requests
 
-✅ Set your backend URL here
+Set your backend URL here
 API_BASE_URL = "https://chatbotthemeidentifier-s6xt.onrender.com"
 
-st.set_page_config(page_title="📄 DocBot – Chat with your PDFs", layout="centered")
+st.set_page_config(page_title="DocBot – Chat with your PDFs", layout="centered")
 st.title("📄 DocBot – Chat with your PDFs")
 
-File uploader
 uploaded_file = st.file_uploader("📎 Upload a PDF file", type=["pdf"])
 
 if uploaded_file:
@@ -29,7 +28,6 @@ filename = data.get("filename")
 
 st.success("✅ File uploaded successfully!")
 
-# Question input
 question = st.text_input("💬 Ask a question about the uploaded document:")
 
 if st.button("Get Answer") and question.strip():
